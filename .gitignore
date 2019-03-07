@@ -1,0 +1,10 @@
+.idea/
+.vscode/
+scratch/
+*.out
+*.exe
+node_modules
+localhost
+*.pem
+*.cert
+/src/index.html

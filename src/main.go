@@ -3,14 +3,13 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/gorilla/csrf"
 	"log"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
-
-	"github.com/gorilla/csrf"
 )
 
 var (
@@ -49,15 +48,22 @@ func getSecret() []byte {
 //}
 
 func test(w http.ResponseWriter, r *http.Request) {
-	log.Println("hit")
-	c := r.Context().Value("user").(string)
-
-	m := c
-
-	_, err := fmt.Fprint(w, m)
+	_, err := fmt.Fprint(w, "hit me fam")
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+type TestHandler struct {
+	serve func(w http.ResponseWriter, r *http.Request)
+}
+
+func (t *TestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	t.serve(w, r)
+}
+
+func getTestHandler(fn func(w http.ResponseWriter, r *http.Request)) *TestHandler {
+	return &TestHandler{ serve: fn }
 }
 
 //func testpost(w http.ResponseWriter, r *http.Request) {
@@ -95,30 +101,41 @@ func loadEnv() {
 	}
 }
 
-func main() {
-	dirname = getDirname()
-	loadEnv()
-	config := getConfig()
+func getProtect() func(http.Handler) http.Handler {
 	secret := getSecret()
-	addr := ":" + strconv.Itoa(int((*config).Port))
-
-	protect := csrf.Protect(
+	return csrf.Protect(
 		secret,
 		csrf.Secure(!dev),
 		csrf.RequestHeader("_csrf"),
 	)
+}
+
+func listen(c chan error, mux http.Handler, config *Config) {
+	addr := ":" + strconv.Itoa(int((*config).Port))
+	log.SetOutput(os.Stdout)
+	protect := getProtect()
+	log.Println("starting server at " + config.Host)
+	err := http.ListenAndServeTLS(addr, cert, key, protect(mux))
+	//err := http.ListenAndServeTLS(addr, cert, key, mux)
+	if err != nil {
+        c <- err
+	}
+}
+
+func main() {
+	dirname = getDirname()
+	loadEnv()
+	config := getConfig()
 
 	pmux := createProxyMux(config)
 	tmux := NewPipeableMux()
-	tmux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "hello");
-	})
+
+
 
 	mux := ChainPipeable([]*PipableMux{pmux, tmux})
 
-	log.Println("starting server at " + config.Host)
-	err := http.ListenAndServeTLS(addr, cert, key, protect(mux))
-	if err != nil {
-		log.Panic(err)
-	}
+	c := make(chan error)
+	go listen(c, mux, config)
+	log.Fatal(<- c)
+
 }

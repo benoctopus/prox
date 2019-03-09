@@ -1,6 +1,6 @@
 const gulp = require('gulp');
 const { log } = require('gulp-util');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { Transform } = require('stream');
@@ -109,10 +109,13 @@ gulp.task('run', () => new Promise(resolve => {
   destroyColored('compile');
   if (!compileSuccess) return resolve();
 
-  goProc = exec(out);
+  goProc = execFile(out,);
 
-  new ColoredTransform(goProc.stdout, 'red', { name: 'app' });
-  new ColoredTransform(goProc.stderr, 'blue', { name: 'app' });
+  // TODO: figure out why color stream drops logs when running go programs
+  goProc.stdout.on("data",  chunk => process.stdout.write(chunk.toString().blue));
+  goProc.stdout.on("error",  chunk => process.stdout.write(chunk.toString().red));
+  goProc.stderr.on("data",  chunk => process.stdout.write(chunk.toString().red));
+  goProc.stderr.on("error", chunk => process.stdout.write(chunk.toString().red));
 
   goProc.on('close', (code) => {
     if (code > 0) log(`-- Go errored out with code ${code} --`.red);
@@ -154,7 +157,7 @@ gulp.task("install", async () => {
       new ColoredTransform(p.stdout, 'yellow', { name: dep });
       new ColoredTransform(p.stderr, 'red', { name: dep });
       p.on('close', () => {
-        destroyColored(dep)
+        destroyColored(dep);
         resolve()
       })
     }))

@@ -2,16 +2,13 @@
   "ProxyRoutes": [
     {
       "Name": "/s1/",
-      "Target": "http://127.0.0.1:9000",
-      "CSRF": true
+      "Target": "http://127.0.0.1:9000"
     },
     {
       "Name": "/s2/",
-      "Target": "http://127.0.0.1:9001",
-      "CSRF": true
+      "Target": "http://127.0.0.1:9001"
     }
   ],
   "Port": 8080,
-  "Mode": "development",
   "Host": "https://127.0.0.1:8080"
 }

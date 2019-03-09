@@ -6,7 +6,15 @@ const fs = require('fs');
 const { Transform } = require('stream');
 require('colors');
 
+const src = path.join(__dirname, 'src');
+const glob = path.join(src, '*.go');
+const out = path.resolve(src, 'a.out');
+
 let colorStreams = [];
+let redis = null;
+let goProc = null;
+let compileSuccess = false;
+let retry = 0;
 
 class ColoredTransform extends Transform {
   constructor(procOut, color, { name, ...opts }) {
@@ -14,27 +22,66 @@ class ColoredTransform extends Transform {
     procOut.pipe(this);
     this.pipe(process.stdout);
     this.color = color || 'white';
+    this.procOut = procOut;
     colorStreams.push(this);
   }
 
   _transform(chunk, encoding, callback) {
     this.push(chunk.toString()[this.color])
   }
+
+  stop() {
+    this.emit('end')
+    this.unpipe(process.stdout)
+    procOut.unpipe(this)
+    this.destroy()
+  }
 }
 
 const destroyColored = (name) => {
-  colorStreams.forEach(stream => {
-    if (stream.name === name) stream.destroy();
+  colorStreams.forEach((stream, i) => {
+    if (stream.name === name) {
+      stream.stop();
+    }
+    colorStreams.splice(i, 1)
   });
-  colorStreams = [];
 };
 
-const src = path.join(__dirname, 'src');
-const glob = path.join(src, '*.go');
-const out = path.resolve(src, 'a.out');
+const murderRedis = () => new Promise(resolve => {
+  const serialKiller = exec('docker container rm -f redis-authorizer');
+  new ColoredTransform(redis.stdout, 'yellow', { name: 'redis' })
+  new ColoredTransform(redis.stderr, 'red', { name: 'redis' })
+  serialKiller.on('close', (code) => {
+    if (code > 0) {
+      util.log('FAILED TO KILL REDIS CONTAINER'.red);
+      process.exit(code);
+    }
+    resolve();
+  })
+});
 
-let goProc = null;
-let compileSuccess = false;
+const startRedis = async () => {
+  console.log('--- Starting Redis Container ---\n'.green)
+  const redis = exec('docker run --name redis-authorizer --rm -p 6379:6379 redis');
+
+  new ColoredTransform(redis.stdout, 'yellow', { name: 'redis' })
+  new ColoredTransform(redis.stderr, 'red', { name: 'redis' })
+
+  return redis.on('close', (code => {
+    if (code > 0) {
+      if (code === 125 && retry < 10) {
+        retry++;
+        murderRedis()
+          .then(() => startRedis);
+        return;
+      }
+      return util.log(`--- Redis exited with code ${code} :'( ---\n\n`.red);
+      process.exit(code);
+    }
+    return util.log('--- Redis exited cleanly! ---'.green);
+  }))
+};
+
 
 gulp.task('compile', () => new Promise(resolve => {
   destroyColored('app');
@@ -46,12 +93,12 @@ gulp.task('compile', () => new Promise(resolve => {
   } catch (err) {
   }
 
-  const proc = exec(`go build -o ${out} ${glob}`);
+  const p = exec(`go build -o ${out} ${glob}`);
 
-  new ColoredTransform(proc.stdout, 'blue', { name: 'compile' });
-  new ColoredTransform(proc.stderr, 'red', { name: 'compile' });
+  new ColoredTransform(p.stdout, 'blue', { name: 'compile' });
+  new ColoredTransform(p.stderr, 'red', { name: 'compile' });
 
-  proc.on('close', (code) => {
+  p.on('close', (code) => {
     if (code > 0) log(`-- Compiler errored out with code ${code} --`.red);
     else compileSuccess = true;
     resolve()
@@ -78,11 +125,14 @@ gulp.task('run', () => new Promise(resolve => {
 
 gulp.task(
   'dev',
-  () => gulp.watch(
-    'src/**/*.go',
-    { queue: true, ignoreInitial: false },
-    gulp.series(['compile', 'run']),
-  )
+  async () => {
+    await startRedis()
+    return gulp.watch(
+      'src/**/*.go',
+      { queue: true, ignoreInitial: false },
+      gulp.series(['compile', 'run']),
+    )
+  }
 );
 
 gulp.task("install", async () => {
@@ -103,9 +153,55 @@ gulp.task("install", async () => {
       const p = exec(`go get -t ${dep}`);
       new ColoredTransform(p.stdout, 'yellow', { name: dep });
       new ColoredTransform(p.stderr, 'red', { name: dep });
-      p.on('close', () => resolve())
+      p.on('close', () => {
+        destroyColored(dep)
+        resolve()
+      })
     }))
   );
+
+  let images = ['redis']
+
+  log(
+    '\n-- Pulling --\n'.yellow,
+    images.map(image => image.yellow).join('\n'),
+    '\n'
+  );
+
+  await Promise.all(
+    images.map((image) => new Promise(resolve => {
+      const p = exec(`docker pull ${image}`);
+      new ColoredTransform(p.stdout, 'yellow', { name: image });
+      new ColoredTransform(p.stderr, 'red', { name: image });
+      p.on('close', () => {
+        destroyColored(image)
+        resolve()
+      })
+    }))
+  );
+
+  log('\n-- Creating development ssl cert --\n'.yellow)
+
+  let l = false;
+
+  try {
+    l = fs.statSync(path.join(__dirname, 'localhost')).isDirectory();
+  } catch (err) {
+  } finally {
+    [
+      ...fs.readdirSync(__dirname).map(it => path.join(__dirname, it)),
+      ...(
+        l ?
+          fs.readdirSync(path.join(__dirname, 'localhost'))
+            .map(it => path.join(__dirname, 'localhost', it))
+          : []
+      )
+    ].forEach(f => {
+      if (f.split('.').pop() === 'pem')
+        fs.unlinkSync(f);
+    });
+  }
+
 
   return new Promise(resolve => {
     const p = exec(`minica --domains localhost`);

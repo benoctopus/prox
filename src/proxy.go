@@ -36,11 +36,13 @@ func getRelativePath(path string) string {
 	return string(path[start:])
 }
 
-func createProxies(config *Config, mux *http.ServeMux) {
+func createProxyMux(config *Config) *PipableMux{
+	mux := NewPipeableMux()
 	for _, route := range config.ProxyRoutes {
 		h := createProxy(&route, config.Host)
 		mux.Handle(route.Name, h)
 	}
+	return mux
 }
 
 func createProxy(cr *ProxyRoute, host string) http.Handler {

@@ -2,19 +2,24 @@ package main
 
 import (
 	"crypto/rand"
-	"github.com/gorilla/csrf"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
+
+	"github.com/gorilla/csrf"
 )
 
-var dirname string
-var cert string
-var key string
-var dev bool
+var (
+	dirname  string
+	cert     string
+	key      string
+	dev      bool
+	redisURL string
+)
 
 func getDirname() string {
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
@@ -27,12 +32,11 @@ func getDirname() string {
 func getSecret() []byte {
 	// Todo: make real key for production
 	secret := make([]byte, 32)
-	size, err := rand.Read(secret)
+	_, err := rand.Read(secret)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	log.Println(size)
 	return secret
 }
 
@@ -43,6 +47,18 @@ func getSecret() []byte {
 //		log.Fatal(err)
 //	}
 //}
+
+func test(w http.ResponseWriter, r *http.Request) {
+	log.Println("hit")
+	c := r.Context().Value("user").(string)
+
+	m := c
+
+	_, err := fmt.Fprint(w, m)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 
 //func testpost(w http.ResponseWriter, r *http.Request) {
 //	err := csrf.FailureReason(r)
@@ -72,6 +88,11 @@ func loadEnv() {
 	} else {
 		key = path.Join(dirname, "../", "localhost", "key.pem")
 	}
+	if v, ex := os.LookupEnv("REDIS_URL"); ex {
+		redisURL = v
+	} else {
+		redisURL = "127.0.0.1:6379"
+	}
 }
 
 func main() {
@@ -87,13 +108,13 @@ func main() {
 		csrf.RequestHeader("_csrf"),
 	)
 
-	var mux *http.ServeMux
-	mux = &http.ServeMux{}
+	pmux := createProxyMux(config)
+	tmux := NewPipeableMux()
+	tmux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "hello");
+	})
 
-	//mux.HandleFunc("/test", test)
-	//mux.HandleFunc("/test/post", testpost)
-
-	createProxies(config, mux)
+	mux := ChainPipeable([]*PipableMux{pmux, tmux})
 
 	log.Println("starting server at " + config.Host)
 	err := http.ListenAndServeTLS(addr, cert, key, protect(mux))

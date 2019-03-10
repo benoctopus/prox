@@ -11,6 +11,10 @@
       "Restrict": true
     }
   ],
+  "RedisSession": {
+    "Use": true,
+    "URL": "127.0.0.1:6379"
+  },
   "CSRFProtection": false,
   "Port": 8080,
   "Host": "https://127.0.0.1:8080"

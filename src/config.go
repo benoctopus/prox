@@ -8,16 +8,16 @@ import (
 )
 
 type ProxyRoute struct {
-	Name   string
-	Target string
-	CSRF bool
+	Name     string
+	Target   string
+	Restrict bool
 }
 
 type Config struct {
-	ProxyRoutes []ProxyRoute
-	Port        uint
-	Host        string
-	Mode        string
+	ProxyRoutes    []ProxyRoute
+	Port           uint
+	Host           string
+	CSRFProtection bool
 }
 
 func getConfig() *Config {

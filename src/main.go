@@ -63,7 +63,7 @@ func (t *TestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func getTestHandler(fn func(w http.ResponseWriter, r *http.Request)) *TestHandler {
-	return &TestHandler{ serve: fn }
+	return &TestHandler{serve: fn}
 }
 
 //func testpost(w http.ResponseWriter, r *http.Request) {
@@ -113,12 +113,17 @@ func getProtect() func(http.Handler) http.Handler {
 func listen(c chan error, mux http.Handler, config *Config) {
 	addr := ":" + strconv.Itoa(int((*config).Port))
 	log.SetOutput(os.Stdout)
-	protect := getProtect()
 	log.Println("starting server at " + config.Host)
-	err := http.ListenAndServeTLS(addr, cert, key, protect(mux))
-	//err := http.ListenAndServeTLS(addr, cert, key, mux)
+	var err error
+
+	if config.CSRFProtection {
+		protect := getProtect()
+		err = http.ListenAndServeTLS(addr, cert, key, protect(mux))
+	} else {
+		err = http.ListenAndServeTLS(addr, cert, key, mux)
+	}
 	if err != nil {
-        c <- err
+		c <- err
 	}
 }
 
@@ -130,12 +135,13 @@ func main() {
 	pmux := createProxyMux(config)
 	tmux := NewPipeableMux()
 
-
+	pmux.Handle("/signup", withSession(getTestHandler(test), 1))
+	pmux.Handle("/verify", withSession(getTestHandler(test), 0))
 
 	mux := ChainPipeable([]*PipableMux{pmux, tmux})
 
 	c := make(chan error)
 	go listen(c, mux, config)
-	log.Fatal(<- c)
+	log.Fatal(<-c)
 
 }

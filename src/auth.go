@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"github.com/mediocregopher/radix"
 	"log"
 	"net/http"
@@ -15,30 +16,26 @@ type SessionManager struct {
 }
 
 func (s *SessionManager) AuthFailureRedirect(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/Login", 403)
+	var code int
+	if r.Method == "GET" {
+		code = 303
+		http.Redirect(w, r, "/login", code)
+		return
+	}
+	code = 403
+	w.WriteHeader(code)
+	return
 }
 
 func (s *SessionManager) makeToken() (string, error) {
-	b := make([]byte, 32)
+	b := make([]byte, 16)
 	_, err := rand.Read(b)
-	token := string(b)
+	token := base64.URLEncoding.EncodeToString(b)
 
 	if err != nil {
 		log.Fatal(err)
 		return "", err
 	}
-
-	//var result string
-	//gerr := s.Pool.Do(radix.Cmd(&result, "GET", token))
-	//
-	//if err != nil {
-	//	log.Fatal(gerr)
-	//	return "", gerr
-	//}
-
-	//if len(result) == 0 {
-	//	return s.makeToken()
-	//}
 
 	return token, nil
 }
@@ -101,7 +98,7 @@ func (s *SessionManager) Auth(w http.ResponseWriter, r *http.Request) {
 	if c, ece := r.Cookie("atx"); ece == nil {
 		var id string
 		rerr := s.Pool.Do(radix.Cmd(&id, "get", c.Value))
-		w.Header().Set("User", id)
+		r.Header.Set("User", id)
 
 		if rerr != nil {
 			log.Fatal(rerr)
@@ -110,6 +107,7 @@ func (s *SessionManager) Auth(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		s.AuthFailureRedirect(w, r)
+		return
 	}
 
 	s.Next.ServeHTTP(w, r)

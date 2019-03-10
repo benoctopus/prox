@@ -56,5 +56,9 @@ func createProxy(cr *ProxyRoute, host string) http.Handler {
 	p := httputil.NewSingleHostReverseProxy(u)
 	handler := ProxyHandler{Proxy: p, URL: u, Host: host}
 
+	if cr.Restrict {
+		return withSession(&handler, 0)
+	}
+
 	return &handler
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
+	"os"
 	"path"
 )
 
@@ -15,13 +16,27 @@ type ProxyRoute struct {
 
 type Config struct {
 	ProxyRoutes    []ProxyRoute
-	Port           uint
-	Host           string
+	HTTPSPort      uint
+	HTTPSHost      string
+	HTTPPort       uint
+	HTTPHost       string
 	CSRFProtection bool
 }
 
 func getConfig() *Config {
-	raw, err := ioutil.ReadFile(path.Join(dirname, "config.json"))
+	var p string
+
+	if v, ex := os.LookupEnv("CONFIG_PATH"); ex {
+		if path.IsAbs(v) {
+			p = v
+		} else {
+			p = path.Join(dirname, v)
+		}
+	} else {
+		p = path.Join(dirname, "config.json")
+	}
+
+	raw, err := ioutil.ReadFile(p)
 
 	if err != nil {
 		log.Fatal("FAILED TO READ CONFIGURATION FILE")

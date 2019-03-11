@@ -2,8 +2,8 @@ package main
 
 import (
 	"crypto/rand"
-	"fmt"
 	"github.com/gorilla/csrf"
+	"github.com/gorilla/handlers"
 	"log"
 	"net/http"
 	"os"
@@ -47,24 +47,24 @@ func getSecret() []byte {
 //	}
 //}
 
-func test(w http.ResponseWriter, r *http.Request) {
-	_, err := fmt.Fprint(w, "hit me fam")
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-type TestHandler struct {
-	serve func(w http.ResponseWriter, r *http.Request)
-}
-
-func (t *TestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	t.serve(w, r)
-}
-
-func getTestHandler(fn func(w http.ResponseWriter, r *http.Request)) *TestHandler {
-	return &TestHandler{serve: fn}
-}
+//func test(w http.ResponseWriter, r *http.Request) {
+//	_, err := fmt.Fprint(w, "hit me fam")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//}
+//
+//type TestHandler struct {
+//	serve func(w http.ResponseWriter, r *http.Request)
+//}
+//
+//func (t *TestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+//	t.serve(w, r)
+//}
+//
+//func getTestHandler(fn func(w http.ResponseWriter, r *http.Request)) *TestHandler {
+//	return &TestHandler{serve: fn}
+//}
 
 //func testpost(w http.ResponseWriter, r *http.Request) {
 //	err := csrf.FailureReason(r)
@@ -111,17 +111,42 @@ func getProtect() func(http.Handler) http.Handler {
 }
 
 func listen(c chan error, mux http.Handler, config *Config) {
-	addr := ":" + strconv.Itoa(int((*config).Port))
-	log.SetOutput(os.Stdout)
-	log.Println("starting server at " + config.Host)
-	var err error
+	addr := ":" + strconv.Itoa(int((*config).HTTPSPort))
 
 	if config.CSRFProtection {
-		protect := getProtect()
-		err = http.ListenAndServeTLS(addr, cert, key, protect(mux))
-	} else {
-		err = http.ListenAndServeTLS(addr, cert, key, mux)
+		mux = getProtect()(mux)
 	}
+
+	mux = handlers.CombinedLoggingHandler(os.Stdout, mux)
+
+	log.SetOutput(os.Stdout)
+	log.Println("starting server at " + config.HTTPSHost)
+
+	err := http.ListenAndServeTLS(addr, cert, key, mux)
+
+	if err != nil {
+		c <- err
+	}
+}
+
+type HTTPSRedirector struct {
+	config *Config
+}
+
+func (h *HTTPSRedirector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, h.config.HTTPSHost+r.URL.Path, 303)
+}
+
+func redirectToHTTPS(c chan error, config *Config) {
+	addr := ":" + strconv.Itoa(int((*config).HTTPPort))
+
+	handler := handlers.CombinedLoggingHandler(os.Stdout, &HTTPSRedirector{config: config})
+
+	log.SetOutput(os.Stdout)
+	log.Println("Redirecting http from: " + config.HTTPHost)
+
+	err := http.ListenAndServe(addr, handler)
+
 	if err != nil {
 		c <- err
 	}
@@ -133,15 +158,10 @@ func main() {
 	config := getConfig()
 
 	pmux := createProxyMux(config)
-	tmux := NewPipeableMux()
-
-	pmux.Handle("/signup", withSession(getTestHandler(test), 1))
-	pmux.Handle("/verify", withSession(getTestHandler(test), 0))
-
-	mux := ChainPipeable([]*PipableMux{pmux, tmux})
 
 	c := make(chan error)
-	go listen(c, mux, config)
+	go redirectToHTTPS(c, config)
+	go listen(c, pmux, config)
 	log.Fatal(<-c)
 
 }

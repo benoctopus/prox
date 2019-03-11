@@ -17,7 +17,7 @@ func (p *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.URL.Host = p.URL.Host
 	r.URL.Scheme = p.URL.Scheme
 	r.URL.Path = getRelativePath(r.URL.Path)
-	r.Header.Set("X-Forward-Host", r.Header.Get("Host"))
+	r.Header.Set("X-Forward-HTTPSHost", r.Header.Get("HTTPSHost"))
 	p.Proxy.ServeHTTP(w, r)
 }
 
@@ -39,7 +39,7 @@ func getRelativePath(path string) string {
 func createProxyMux(config *Config) *PipableMux{
 	mux := NewPipeableMux()
 	for _, route := range config.ProxyRoutes {
-		h := createProxy(&route, config.Host)
+		h := createProxy(&route, config.HTTPSHost)
 		mux.Handle(route.Name, h)
 	}
 	return mux

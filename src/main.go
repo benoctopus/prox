@@ -7,15 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 )
 
 var (
 	dirname  string
-	cert     string
-	key      string
 	dev      bool
 	redisURL string
 )
@@ -79,25 +76,10 @@ func getSecret() []byte {
 //}
 
 func loadEnv() {
-	if v, ex := os.LookupEnv("GO_MODE"); ex && v == "production" {
-		dev = false
-	} else {
+	if v, ex := os.LookupEnv("GO_MODE"); ex && v == "development" {
 		dev = true
-	}
-	if v, ex := os.LookupEnv("CERT_PATH"); ex {
-		cert = v
 	} else {
-		cert = path.Join(dirname, "../", "localhost", "cert.pem")
-	}
-	if v, ex := os.LookupEnv("KEY_PATH"); ex {
-		key = v
-	} else {
-		key = path.Join(dirname, "../", "localhost", "key.pem")
-	}
-	if v, ex := os.LookupEnv("REDIS_URL"); ex {
-		redisURL = v
-	} else {
-		redisURL = "127.0.0.1:6379"
+		dev = false
 	}
 }
 
@@ -122,7 +104,7 @@ func listen(c chan error, mux http.Handler, config *Config) {
 	log.SetOutput(os.Stdout)
 	log.Println("starting server at " + config.HTTPSHost)
 
-	err := http.ListenAndServeTLS(addr, cert, key, mux)
+	err := http.ListenAndServeTLS(addr, config.TLSCertPath, config.TLSKeyPath, mux)
 
 	if err != nil {
 		c <- err

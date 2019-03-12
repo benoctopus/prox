@@ -131,17 +131,18 @@ func withSession(next http.Handler, mode int) http.Handler {
 	return &sm
 }
 
-var getRedis = _getRedis()
+var getRedis func() *radix.Pool
 
-func _getRedis() func() *radix.Pool {
+func _getRedis(config *Config) func() *radix.Pool {
 	init := false
 	var c *radix.Pool
 	return func() *radix.Pool {
 		if init {
 			return c
 		}
+
 		var err error = nil
-		c, err = radix.NewPool("tcp", redisURL, 10)
+		c, err = radix.NewPool("tcp", config.RedisURL, 10)
 
 		if err != nil {
 			log.Panic(err)

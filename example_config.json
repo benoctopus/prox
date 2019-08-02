@@ -1,0 +1,21 @@
+{
+  "ProxyRoutes": [
+    {
+      "Name": "/apiserver1/",
+      "Target": "http://127.0.0.1:9000",
+      "Restrict": true
+    },
+    {
+      "Name": "/apiserver22/",
+      "Target": "http://127.0.0.1:9001",
+      "Restrict": true
+    }
+  ],
+  "RedisSession": {
+    "Use": true,
+    "URL": "127.0.0.1:6379"
+  },
+  "CSRFProtection": false,
+  "Port": 8080,
+  "Host": "https://127.0.0.1:8080"
+}

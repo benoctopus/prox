@@ -1,0 +1,26 @@
+{
+  "ProxyRoutes": [
+    {
+      "Name": "/apiserver1/",
+      "Target": "http://next",
+      "Restrict": false
+    },
+    {
+      "Name": "/tngx/",
+      "Target": "http://tngx:80",
+      "Restrict": false
+    },
+    {
+      "Name": "/node/",
+      "Target": "http://node:3000",
+      "Restrict": false
+    }
+  ],
+  "CSRFProtection": false,
+  "HTTPPort": 80,
+  "HTTPSPort": 443,
+  "HTTPSHost": "https://127.0.0.1",
+  "HTTPHost": "http://127.0.0.1",
+  "TLSCertPath": "/certs/dev.org+3.pem",
+  "TLSKeyPath": "/certs/dev.org+3-key.pem"
+}

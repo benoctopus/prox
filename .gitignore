@@ -1,8 +1,9 @@
 .idea/
 .vscode/
 scratch/
-*.out
-*.exe
+src/*.out
+src/*.exe
+src/prox
 node_modules
 localhost
 *.pem

@@ -1,0 +1,23 @@
+version: "3.2"
+services:
+  prox:
+    build:
+      context: ./src
+      dockerfile: $HERE/src/Dockerfile
+    links:
+      - tngx
+      - node
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - type: bind
+        source: $HERE/src
+        target: /go/src/github.com/benoctopus/prox
+  node:
+    build:
+      dockerfile: $HERE/next_example/Dockerfile
+      context: $HERE/next_example
+  tngx:
+    image: "nginx:latest"
+

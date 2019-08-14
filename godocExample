@@ -1,0 +1,7 @@
+FROM golang:buster
+
+EXPOSE 80 3000
+
+RUN go get -v golang.org/x/tools/cmd/godoc
+
+CMD ["sh", "-c", "/go/bin/godoc", "-http=127.0.0.1:3000"]

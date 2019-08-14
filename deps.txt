@@ -1,5 +1,0 @@
-github.com/gorilla/csrf
-github.com/gorilla/handlers
-github.com/mediocregopher/radix
-github.com/jsha/minica
-github.com/githubnemo/CompileDaemon
